@@ -16,8 +16,96 @@ local function get_luasteam()
 	return G and G.STEAM
 end
 
+-----------------------------
+-- STEAM PROVIDERS
+-----------------------------
+
+-- A build with no Steam client (iOS/Android) can register a provider that
+-- stands in for luasteam: another mod supplies the Steam id, persona name and
+-- auth tickets. luasteam always wins when G.STEAM exists, so desktop is
+-- unchanged even with a provider registered.
+--
+-- provider = {
+--   present()          -> bool  installed on this device
+--   ready()            -> bool  can hand out auth tickets now
+--   offline_reason()   -> an MPAPI.OfflineReason: why it is not ready
+--   get_steam_id(), get_persona_name(), get_auth_ticket(), cancel_auth_ticket(handle)
+--                            same returns as the luasteam versions below
+--   -- optional:
+--   settled()          -> bool  false while still starting up (logging in
+--                               from a stored login); the first connect waits
+--   login_needed()     -> bool  the menu's account button opens the provider's
+--   login_label()      -> string  login (open_login) under this label instead
+--   open_login()                 of retrying the connection
+-- }
+local provider = nil
+-- The first connect is waiting for the provider to settle (core.lua).
+local startup_waiting = false
+-- ready() when provider_changed last looked: becoming ready is the player
+-- logging in (also after logging out), so a disconnected client connects.
+local was_ready = false
+
+function steam.register_provider(p)
+	provider = p
+end
+
+local function active_provider()
+	if not get_luasteam() and provider and provider.present() then
+		return provider
+	end
+end
+
+-- The provider in use, or nil (luasteam, or nothing at all).
+function steam.provider()
+	return active_provider()
+end
+
+-- Startup (core.lua): true defers the first connect until the provider settles.
+function steam.defer_startup_connect()
+	local p = active_provider()
+	startup_waiting = p ~= nil and p.settled ~= nil and not p.settled()
+	return startup_waiting
+end
+
+-- The provider calls this whenever ready(), settled() or login_needed() may
+-- have changed: the menu shows the new state, and a connect that was waiting
+-- for the provider starts.
+function steam.provider_changed()
+	local p = active_provider()
+	local ready = p ~= nil and p.ready()
+	local became_ready = ready and not was_ready
+	was_ready = ready
+	if MPAPI.connection_state.state ~= MPAPI.ConnectionState.DISCONNECTED then
+		return
+	end
+	if MPAPI.account_button then
+		MPAPI.account_button:update()
+	end
+	if startup_waiting and not (p and p.settled and not p.settled()) then
+		startup_waiting = false
+		MPAPI.connect()
+	elseif became_ready and MPAPI.is_ready() then
+		-- Before startup (core.lua) the first connect is still to come.
+		MPAPI.disconnect()
+		MPAPI.connect(MPAPI.get_last_opts() or {})
+	end
+end
+
 function steam.available()
+	local p = active_provider()
+	if p then
+		return p.ready()
+	end
 	return get_luasteam() ~= nil
+end
+
+-- Why available() is false, as an MPAPI.OfflineReason.
+function steam.unavailable_reason()
+	local p = active_provider()
+	if p then
+		return p.offline_reason()
+	end
+	return MPAPI.OfflineReason.STEAM_NOT_RUNNING
 end
 
 function steam.get_steam_id()
@@ -264,6 +352,19 @@ else
 		return nil, 'FFI not available for auth tickets'
 	end
 	function steam.cancel_auth_ticket() end
+end
+
+-- With a provider in use it answers instead of luasteam. Same return shapes,
+-- so connection.lua needs no other change.
+for _, name in ipairs({ 'get_steam_id', 'get_persona_name', 'get_auth_ticket', 'cancel_auth_ticket' }) do
+	local luasteam_version = steam[name]
+	steam[name] = function(...)
+		local p = active_provider()
+		if p then
+			return p[name](...)
+		end
+		return luasteam_version(...)
+	end
 end
 
 MPAPI.networking.steam = steam

@@ -87,6 +87,22 @@ To run a Community server yourself, see "Run a Community server" in the [Balatro
 
 Options passed to `MPAPI.connect{ host, port, secure, server_key, web_url }` take precedence over the config.
 
+### Steam providers
+
+A build with no Steam client (for example iOS/Android) can get its Steam login
+from another mod. That mod registers a provider with
+`MPAPI.networking.steam.register_provider{ ... }` (the fields are documented in
+`networking/steam.lua`) and calls `MPAPI.networking.steam.provider_changed()`
+whenever its state changes. When `G.STEAM` exists the provider is ignored, so
+desktop behaves exactly as without it. Related hooks:
+
+- `MPAPI.add_account_overlay_button(build)`: adds a button to the account
+  overlay; `build()` returns a UI node, or nil to show nothing.
+- `MPAPI.text_input_active = true` while a mod's own text field has focus, so
+  the chat key (`t`) does not open the chat.
+- `BET_OPENSSL_SSL_PATH` / `BET_OPENSSL_CRYPTO_PATH`: exact OpenSSL library
+  paths, tried first on any OS.
+
 ## Using MPAPI from a mod
 
 Declare the dependency in your mod's JSON:

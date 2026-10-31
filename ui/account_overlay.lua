@@ -282,14 +282,31 @@ discord_linking_buttons = function(discord_linked)
 	}
 end
 
+-- Buttons other mods add next to the Discord one. Each build() returns a UI
+-- node (for example UIBox_button{...}) or nil to show nothing this time.
+local extra_buttons = {}
+
+function MPAPI.add_account_overlay_button(build)
+	extra_buttons[#extra_buttons + 1] = build
+end
+
 settings_row = function(discord_linked)
+	local nodes = {
+		display_name_option_cycle(discord_linked),
+		discord_linking_buttons(discord_linked),
+	}
+	for _, build in ipairs(extra_buttons) do
+		local ok, node = pcall(build)
+		if ok and node then
+			nodes[#nodes + 1] = { n = G.UIT.C, config = { align = 'cm', padding = 0.1 }, nodes = { node } }
+		elseif not ok then
+			MPAPI.sendWarnMessage('[account_overlay] extra button failed: ' .. tostring(node))
+		end
+	end
 	return {
 		n = G.UIT.R,
 		config = { align = 'cm', padding = 0.1 },
-		nodes = {
-			display_name_option_cycle(discord_linked),
-			discord_linking_buttons(discord_linked),
-		},
+		nodes = nodes,
 	}
 end
 
