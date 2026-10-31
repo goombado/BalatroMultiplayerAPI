@@ -7,6 +7,14 @@ local attach_account_button
 -- UI FUNCTIONS
 -----------------------------
 
+-- A Steam provider (networking/steam.lua) that needs the player to log in
+-- first: the account button opens its login instead of retrying.
+local function provider_login_needed()
+	local steam = MPAPI.networking.steam
+	local provider = steam and steam.provider()
+	return provider ~= nil and provider.login_needed ~= nil and provider.login_needed()
+end
+
 local create_UIBox_account_button = function()
 	local status_colour = G.C.RED
 	if MPAPI.connection_state.state == MPAPI.ConnectionState.CONNECTED then
@@ -43,6 +51,11 @@ local create_UIBox_account_button = function()
 	elseif state == MPAPI.ConnectionState.TOS_REQUIRED then
 		account_button_label = { n = G.UIT.T, config = {
 			text = localize('b_sign_in'),
+			scale = 0.4, colour = G.C.UI.TEXT_LIGHT, shadow = true,
+		} }
+	elseif state == MPAPI.ConnectionState.DISCONNECTED and provider_login_needed() then
+		account_button_label = { n = G.UIT.T, config = {
+			text = MPAPI.networking.steam.provider().login_label(),
 			scale = 0.4, colour = G.C.UI.TEXT_LIGHT, shadow = true,
 		} }
 	else
@@ -252,6 +265,8 @@ G.FUNCS.mpapi_account_button = function(e)
 	local state = MPAPI.connection_state.state
 	if state == MPAPI.ConnectionState.CONNECTED then
 		MPAPI.open_account_overlay()
+	elseif state == MPAPI.ConnectionState.DISCONNECTED and provider_login_needed() then
+		MPAPI.networking.steam.provider().open_login()
 	elseif state == MPAPI.ConnectionState.DISCONNECTED then
 		MPAPI.sendDebugMessage('[main_menu] retry pressed | UIBOX: ' .. tostring(G.I and G.I.UIBOX and #G.I.UIBOX or '?') .. ' | ROOM_ATTACH scale: ' .. tostring(G.ROOM_ATTACH and G.ROOM_ATTACH.VT and G.ROOM_ATTACH.VT.scale or '?'))
 		MPAPI.disconnect()

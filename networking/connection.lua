@@ -278,13 +278,22 @@ function connection:_login_refused(prefix, message, offline_reason, answered)
 	})
 end
 
+-- Desktop: Steam is not running. With a Steam provider (networking/steam.lua),
+-- the provider says why (for example: not logged in yet).
+function connection:_steam_unavailable_reason()
+	if self.steam and self.steam.unavailable_reason then
+		return self.steam.unavailable_reason()
+	end
+	return MPAPI.OfflineReason.STEAM_NOT_RUNNING
+end
+
 -- The Steam ticket goes to Nakama as a custom login: Nakama's built-in Steam
 -- check needs Balatro's publisher key, so the server's runtime hook checks
 -- the ticket in vars.steam_ticket and replaces the placeholder id with
 -- "steamhash:<64 hex>" (a hash of the SteamID, never the SteamID itself).
 function connection:_try_steam_auth()
 	if not self.steam or not self.steam.available() then
-		fail(self, MPAPI.OfflineReason.STEAM_NOT_RUNNING, 'Steam is not available')
+		fail(self, self:_steam_unavailable_reason(), 'Steam is not available')
 		return
 	end
 
@@ -329,7 +338,7 @@ end
 function connection:_try_device_auth()
 	local steam_id, err = self.steam.get_steam_id()
 	if not steam_id then
-		fail(self, MPAPI.OfflineReason.STEAM_NOT_RUNNING, 'Steam id unavailable: ' .. tostring(err))
+		fail(self, self:_steam_unavailable_reason(), 'Steam id unavailable: ' .. tostring(err))
 		return
 	end
 	self.nakama_client.authenticate_device(steam_id, nil, true, nil, function(session)
@@ -394,7 +403,7 @@ function connection:connect()
 	end
 
 	if not self.steam or not self.steam.available() then
-		fail(self, MPAPI.OfflineReason.STEAM_NOT_RUNNING, 'Steam is not available')
+		fail(self, self:_steam_unavailable_reason(), 'Steam is not available')
 		return
 	end
 
