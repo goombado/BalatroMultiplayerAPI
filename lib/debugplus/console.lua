@@ -48,9 +48,10 @@ end
 local orig_keypressed
 local function consoleHandleKey(key, scancode, isrepeat)
 	if not consoleOpen then
-		-- Not while a game text box (lobby code, seed, ...) has focus: a
-		-- typed 't' there would open the console and swallow the rest.
-		local typing = G and G.CONTROLLER and G.CONTROLLER.text_input_hook
+		-- Not while a game text box (lobby code, seed, ...) or another mod's
+		-- text field (MPAPI.text_input_active) has focus: a typed 't' there
+		-- would open the console and swallow the rest.
+		local typing = (G and G.CONTROLLER and G.CONTROLLER.text_input_hook) or (MPAPI and MPAPI.text_input_active)
 		if key == 't' and not typing then
 			openNextFrame = true
 		end
